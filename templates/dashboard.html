@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhantomNet — Security Operations Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', monospace, sans-serif; padding: 24px; }
+        h1 { color: #58a6ff; font-size: 1.6rem; margin-bottom: 8px; }
+        p.sub { color: #8b949e; margin-bottom: 24px; font-size: 0.9rem; }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+        .card h3 { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; margin-bottom: 6px; }
+        .card p { font-size: 1.8rem; font-weight: bold; color: #f0f6fc; }
+        .table-wrapper { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+        th { background: #21262d; color: #8b949e; padding: 12px 16px; text-transform: uppercase; font-size: 0.75rem; }
+        td { padding: 12px 16px; border-bottom: 1px solid #21262d; }
+        tr:hover { background: #1c2128; }
+        .tag { padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
+        .tag-READ { background: rgba(56, 139, 253, 0.15); color: #58a6ff; border: 1px solid #1f6feb; }
+        .tag-WRITE { background: rgba(248, 81, 73, 0.15); color: #f85149; border: 1px solid #da3633; }
+        .empty { text-align: center; color: #8b949e; padding: 32px; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ PhantomNet Honeypot Live Telemetry</h1>
+    <p class="sub">Real-time inspection stream for FUSE filesystem access events.</p>
+
+    <div class="stats">
+        <div class="card">
+            <h3>Total Intercepted Events</h3>
+            <p id="total-events">0</p>
+        </div>
+        <div class="card">
+            <h3>File Reads</h3>
+            <p id="total-reads">0</p>
+        </div>
+        <div class="card">
+            <h3>File Writes / Appends</h3>
+            <p id="total-writes">0</p>
+        </div>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Event Type</th>
+                    <th>Target Virtual Path</th>
+                    <th>Bytes Transferred</th>
+                </tr>
+            </thead>
+            <tbody id="event-rows">
+                <tr><td colspan="4" class="empty">Waiting for attacker activity...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function updateDashboard() {
+            try {
+                const res = await fetch('/api/events');
+                const data = await res.json();
+                
+                document.getElementById('total-events').innerText = data.total;
+                
+                let reads = 0, writes = 0;
+                data.events.forEach(e => {
+                    if (e.type.includes('READ')) reads++;
+                    if (e.type.includes('WRITE')) writes++;
+                });
+                document.getElementById('total-reads').innerText = reads;
+                document.getElementById('total-writes').innerText = writes;
+
+                const tbody = document.getElementById('event-rows');
+                if (data.events.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty">Waiting for attacker activity...</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.events.map(e => `
+                    <tr>
+                        <td style="color: #8b949e;">${e.timestamp}</td>
+                        <td><span class="tag tag-${e.type.includes('WRITE') ? 'WRITE' : 'READ'}">${e.type}</span></td>
+                        <td style="font-family: monospace; color: #79c0ff;">${e.path}</td>
+                        <td>${e.bytes} B</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Failed to fetch events:", err);
+            }
+        }
+
+        setInterval(updateDashboard, 1500);
+        updateDashboard();
+    </script>
+</body>
+</html>
