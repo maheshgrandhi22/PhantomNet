@@ -1,0 +1,53 @@
+import requests
+import json
+import os
+import sys
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "qwen2.5:1.5b"
+
+SESSION_CONTEXT = {
+    "db_user": "phantom_admin",
+    "db_name": "production_db",
+    "db_pass": "P@ssw0rd_Phantom2026!",
+    "ssh_user": "sysadmin",
+    "app_port": "8080"
+}
+
+def generate_honeypot_file(path):
+    prompt = f"""Generate raw plain text Linux config/code for: {path}
+Must include:
+DB_USER = {SESSION_CONTEXT['db_user']}
+DB_PASS = {SESSION_CONTEXT['db_pass']}
+DB_NAME = {SESSION_CONTEXT['db_name']}
+Do not use markdown formatting. Output raw file lines only."""
+
+    payload = {
+        "model": MODEL_NAME,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.2,
+            "num_predict": 150
+        }
+    }
+
+    try:
+        response = requests.post(OLLAMA_URL, json=payload, timeout=30)
+        if response.status_code == 200:
+            result = response.json().get("response", "").strip()
+            if result.startswith("```"):
+                lines = result.splitlines()
+                result = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:]).strip()
+            return result
+    except Exception as e:
+        print(f"[!] Ollama connection failed ({e}). Using fallback payload.", file=sys.stderr)
+
+    return f"<?php\n\\$db_user = '{SESSION_CONTEXT['db_user']}';\n\$db_pass = '{SESSION_CONTEXT['db_pass']}';\n\$db_name = '{SESSION_CONTEXT['db_name']}';\n"
+
+if __name__ == "__main__":
+    test_path = sys.argv[1] if len(sys.argv) > 1 else "/var/www/html/config.php"
+    output = generate_honeypot_file(test_path)
+    print(output)
+46
+
