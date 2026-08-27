@@ -109,3 +109,19 @@ if __name__ == '__main__':
     os.makedirs(mount_point, exist_ok=True)
     print(f"🔒 PhantomFS Honeypot mounting at {mount_point}...")
     FUSE(PhantomFS(), mount_point, foreground=True, allow_other=True)
+import json
+import os
+from datetime import datetime
+
+LOG_FILE = "/root/phantomnet/logs/attacks.json"
+
+def log_security_event(path, action, user_pid="unknown"):
+    event = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "action": action,
+        "target_file": path,
+        "process_id": user_pid
+    }
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(event) + "\n")
