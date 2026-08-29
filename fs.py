@@ -125,3 +125,26 @@ def log_security_event(path, action, user_pid="unknown"):
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     with open(LOG_FILE, "a") as f:
         f.write(json.dumps(event) + "\n")
+cat << 'EOF' >> fs.py
+
+def calculate_risk_score(path):
+    critical_targets = [".aws/credentials", "id_rsa", ".ssh", "shadow", "passwords.txt"]
+    medium_targets = [".env", "config.json", "database.sqlite"]
+    
+    for target in critical_targets:
+        if target in path:
+            return "CRITICAL"
+            
+    for target in medium_targets:
+        if target in path:
+            return "MEDIUM"
+            
+    return "LOW"
+
+def send_security_alert(event):
+    if event["risk_level"] == "CRITICAL":
+        alert_payload = {
+            "text": f"🚨 CRITICAL SECURITY ALERT: Unauthorized access detected on {event['target_file']} at {event['timestamp']}!"
+        }
+        print(f"\n[ALERT TRIGGERED] {alert_payload['text']}\n")
+EOF
