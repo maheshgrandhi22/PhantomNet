@@ -99,3 +99,31 @@
     </script>
 </body>
 </html>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Timestamp</th>
+      <th>Action</th>
+      <th>Target File</th>
+      <th>Risk Level</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for event in events %}
+    <tr>
+      <td>{{ event.timestamp }}</td>
+      <td>{{ event.action }}</td>
+      <td>{{ event.target_file }}</td>
+      <td>
+        {% if event.risk_level == 'CRITICAL' %}
+          <span class="badge bg-danger">CRITICAL</span>
+        {% elif event.risk_level == 'MEDIUM' %}
+          <span class="badge bg-warning text-dark">MEDIUM</span>
+        {% else %}
+          <span class="badge bg-success">LOW</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

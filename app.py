@@ -47,3 +47,24 @@ def clear_events():
 if __name__ == '__main__':
     print("🚀 Starting PhantomNet Dashboard on http://0.0.0.0:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)
+import json
+import os
+from flask import Flask, render_template
+
+app = Flask(__name__)
+LOG_FILE = "/root/phantomnet/logs/attacks.json"
+
+@app.route('/')
+def index():
+    events = []
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r") as f:
+            for line in f:
+                if line.strip():
+                    events.append(json.loads(line.strip()))
+    # Reverse so newest events show first
+    events.reverse()
+    return render_template('dashboard.html', events=events)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
