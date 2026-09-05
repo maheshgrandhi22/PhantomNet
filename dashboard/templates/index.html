@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PhantomNet Threat Telemetry Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: monospace; padding: 20px; }
+        h1 { color: #f0883e; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
+        #logs { background: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 6px; height: 500px; overflow-y: auto; }
+        .entry { margin-bottom: 8px; border-bottom: 1px solid #21262d; padding-bottom: 4px; }
+        .timestamp { color: #8b949e; }
+        .LOW { color: #7ee787; }
+        .MEDIUM { color: #d2a8ff; }
+        .HIGH { color: #ffa657; font-weight: bold; }
+        .CRITICAL { color: #ff7b72; font-weight: bold; background: rgba(255,123,114,0.1); padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <h1>PhantomNet Live Threat & Canary Telemetry</h1>
+    <div id="logs"></div>
+
+    <script>
+        const socket = io();
+        const logsDiv = document.getElementById('logs');
+
+        socket.on('attacker_event', function(data) {
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            entry.innerHTML = `<span class="timestamp">[${data.timestamp}]</span> 
+                               [<span class="${data.threat_level}">${data.threat_level} - Score: ${data.threat_score}</span>] 
+                               <strong>${data.event_type}</strong> on 
+                               <span style="color: #58a6ff;">${data.path}</span>`;
+            logsDiv.prepend(entry);
+        });
+    </script>
+</body>
+</html>

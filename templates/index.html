@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PhantomNet // Security Operations</title>
+    <style>
+        body { background-color: #0b131a; color: #8b9bb4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; }
+        h1 { color: #ffffff; font-size: 20px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .sub-header { font-size: 12px; color: #4e6179; margin-bottom: 20px; text-transform: uppercase; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .card { background: #131c25; border: 1px solid #1f2d3d; border-radius: 4px; padding: 15px; position: relative; }
+        .card-title { font-size: 10px; text-transform: uppercase; color: #4e6179; font-weight: bold; }
+        .card-value { font-size: 24px; color: #ffffff; font-weight: bold; margin-top: 5px; }
+        .main-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .panel { background: #131c25; border: 1px solid #1f2d3d; border-radius: 4px; padding: 20px; min-height: 250px; margin-bottom: 20px; }
+        .panel-title { font-size: 12px; text-transform: uppercase; color: #ffffff; font-weight: bold; border-bottom: 1px solid #1f2d3d; padding-bottom: 10px; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+        th { color: #00e5ff; font-size: 11px; text-transform: uppercase; padding-bottom: 10px; border-bottom: 1px solid #1f2d3d; }
+        td { padding: 10px 0; border-bottom: 1px solid #16222f; color: #c0cbdc; }
+    </style>
+</head>
+<body>
+
+    <h1>PhantomNet Security Operations</h1>
+    <div class="sub-header">Security / Overview Dashboard</div>
+
+    <!-- Top Metric Cards -->
+    <div class="metrics-grid">
+        <div class="card">
+            <div class="card-title">Active Sessions</div>
+            <div class="card-value" id="active-sessions">1</div>
+        </div>
+        <div class="card">
+            <div class="card-title">High Severity</div>
+            <div class="card-value" id="high-severity" style="color: #ff5252;">0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Network Flows</div>
+            <div class="card-value" id="network-flows">4</div>
+        </div>
+        <div class="card">
+            <div class="card-title">AI Models Active</div>
+            <div class="card-value" style="color: #00e5ff;">2</div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="main-layout">
+        <div>
+            <div class="panel">
+                <div class="panel-title">Live Event Timeline</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Event Type</th>
+                            <th>Target Virtual Path</th>
+                            <th>Bytes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="event-table-body">
+                        <tr><td colspan="4" style="text-align: center; color: #4e6179;">Waiting for PhantomNet telemetry...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div>
+            <div class="panel">
+                <div class="panel-title">AI Model Status</div>
+                <div style="margin-bottom: 15px;">
+                    <span style="color: #00e5ff; font-size: 13px; font-weight: bold;">sql_model</span>
+                    <div style="font-size: 11px; color: #4e6179;">Database Generation Engine</div>
+                    <div style="background: #1f2d3d; height: 4px; border-radius: 2px; margin-top: 5px;"><div style="background: #00e5ff; width: 85%; height: 100%;"></div></div>
+                </div>
+                <div>
+                    <span style="color: #00e5ff; font-size: 13px; font-weight: bold;">lore_model</span>
+                    <div style="font-size: 11px; color: #4e6179;">Corporate Environment Simulator</div>
+                    <div style="background: #1f2d3d; height: 4px; border-radius: 2px; margin-top: 5px;"><div style="background: #00e5ff; width: 92%; height: 100%;"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchEvents() {
+            try {
+                const response = await fetch('/api/events');
+                const events = await response.json();
+                const tbody = document.getElementById('event-table-body');
+                if (events.length > 0) {
+                    tbody.innerHTML = '';
+                    events.forEach(ev => {
+                        tbody.innerHTML += `<tr><td>${ev.timestamp}</td><td style="color:#00e5ff;">${ev.type}</td><td>${ev.path}</td><td>${ev.bytes}</td></tr>`;
+                    });
+                    document.getElementById('active-sessions').innerText = events.length;
+                }
+            } catch (err) { console.log('Polling error'); }
+        }
+        setInterval(fetchEvents, 2000);
+    </script>
+</body>
+</html>
