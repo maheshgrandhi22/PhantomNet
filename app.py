@@ -45,8 +45,8 @@ def clear_events():
     return jsonify({"status": "cleared"}), 200
 
 if __name__ == '__main__':
-    print("🚀 Starting PhantomNet Dashboard on http://0.0.0.0:5000")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    print("🚀 Starting PhantomNet Dashboard on http://0.0.0.0:5050")
+    app.run(host='0.0.0.0', port=5050, debug=False)
 import json
 import os
 from flask import Flask, render_template
@@ -67,4 +67,4 @@ def index():
     return render_template('dashboard.html', events=events)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5050)

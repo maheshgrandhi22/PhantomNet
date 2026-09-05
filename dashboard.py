@@ -182,5 +182,5 @@ def get_stats():
     return jsonify(parse_logs())
 
 if __name__ == '__main__':
-    print("[+] Starting PhantomNet Dashboard on http://0.0.0.0:5000")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    print("[+] Starting PhantomNet Dashboard on http://0.0.0.0:5050")
+    app.run(host='0.0.0.0', port=5050, debug=False)
