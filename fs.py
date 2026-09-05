@@ -4,51 +4,10 @@ import errno
 import time
 import threading
 import requests
-import json
-from datetime import datetime
 from fuse import FUSE, FuseOSError, Operations
 from lore import LoreGenerator
 
 LOG_API_URL = "http://127.0.0.1:5050/api/event"
-LOG_FILE = "/root/phantomnet/logs/attacks.json"
-
-def calculate_risk_score(path):
-    critical_targets = [".aws/credentials", "id_rsa", ".ssh", "shadow", "passwords.txt"]
-    medium_targets = [".env", "config.json", "database.sqlite"]
-    
-    for target in critical_targets:
-        if target in path:
-            return "CRITICAL"
-            
-    for target in medium_targets:
-        if target in path:
-            return "MEDIUM"
-            
-    return "LOW"
-
-def send_security_alert(event):
-    if event["risk_level"] == "CRITICAL":
-        alert_payload = {
-            "text": f"🚨 CRITICAL SECURITY ALERT: Unauthorized access detected on {event['target_file']} at {event['timestamp']}!"
-        }
-        print(f"\n[ALERT TRIGGERED] {alert_payload['text']}\n")
-
-def log_security_event(path, action, user_pid="unknown"):
-    risk = calculate_risk_score(path)
-    
-    event = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "action": action,
-        "target_file": path,
-        "process_id": user_pid,
-        "risk_level": risk
-    }
-    
-    send_security_alert(event)
-    
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    with open(LOG_FILE, "a") as f:
-        f.write(json.dumps(event) + "\n")
 
 class PhantomFS(Operations):
     def __init__(self):
@@ -70,17 +29,19 @@ class PhantomFS(Operations):
                 }
                 requests.post(LOG_API_URL, json=data, timeout=1.5)
             except Exception:
-                pass  
+                pass  # Non-blocking async fire-and-forget
         threading.Thread(target=send_log, daemon=True).start()
 
     def getattr(self, path, fh=None):
         path = self._norm(path)
         now = time.time()
         
+        # Virtual root / parent directories
         if path in ["/", "/root", "/root/.aws", "/root/.ssh", "/var", "/var/www", "/var/www/html", "/etc"]:
             return dict(st_mode=(0o040755), st_nlink=2, st_size=4096,
                         st_ctime=now, st_mtime=now, st_atime=now)
 
+        # Check in-memory session cache or dynamic lure generator
         content = self.cache.get(path) or self.lore.get_content(path)
         if content is not None:
             size = len(content.encode('utf-8'))
@@ -112,7 +73,6 @@ class PhantomFS(Operations):
     def open(self, path, flags):
         path = self._norm(path)
         self._async_log("FILE_OPEN", path)
-        log_security_event(path, "OPEN")
         return 0
 
     def read(self, path, size, offset, fh):
@@ -124,7 +84,6 @@ class PhantomFS(Operations):
         encoded = content.encode('utf-8')
         chunk = encoded[offset:offset + size]
         self._async_log("FILE_READ", path, num_bytes=len(chunk))
-        log_security_event(path, "READ")
         return chunk
 
     def write(self, path, data, offset, fh):
@@ -134,5 +93,58 @@ class PhantomFS(Operations):
         data_str = data.decode('utf-8', errors='ignore')
         updated = current[:offset] + data_str
         self.cache[path] = updated
-        log_security_event(path, "WRITE")
+        
+        self._async_log("FILE_WRITE", path, num_bytes=len(data), payload=data_str)
         return len(data)
+
+    def truncate(self, path, length, fh=None):
+        path = self._norm(path)
+        current = self.cache.get(path) or self.lore.get_content(path) or ""
+        self.cache[path] = current[:length]
+        self._async_log("FILE_TRUNCATE", path, num_bytes=length)
+        return 0
+
+if __name__ == '__main__':
+    mount_point = "/tmp/phantom_mount"
+    os.makedirs(mount_point, exist_ok=True)
+    print(f"🔒 PhantomFS Honeypot mounting at {mount_point}...")
+    FUSE(PhantomFS(), mount_point, foreground=True, allow_other=True)
+import json
+import os
+from datetime import datetime
+
+LOG_FILE = "/root/phantomnet/logs/attacks.json"
+
+def log_security_event(path, action, user_pid="unknown"):
+    event = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "action": action,
+        "target_file": path,
+        "process_id": user_pid
+    }
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(event) + "\n")
+cat << 'EOF' >> fs.py
+
+def calculate_risk_score(path):
+    critical_targets = [".aws/credentials", "id_rsa", ".ssh", "shadow", "passwords.txt"]
+    medium_targets = [".env", "config.json", "database.sqlite"]
+    
+    for target in critical_targets:
+        if target in path:
+            return "CRITICAL"
+            
+    for target in medium_targets:
+        if target in path:
+            return "MEDIUM"
+            
+    return "LOW"
+
+def send_security_alert(event):
+    if event["risk_level"] == "CRITICAL":
+        alert_payload = {
+            "text": f"🚨 CRITICAL SECURITY ALERT: Unauthorized access detected on {event['target_file']} at {event['timestamp']}!"
+        }
+        print(f"\n[ALERT TRIGGERED] {alert_payload['text']}\n")
+EOF
