@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 /tmp/phantom_mount/
 .chromadb/
+node_modules

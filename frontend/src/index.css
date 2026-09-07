@@ -1,0 +1,55 @@
+body {
+  background-color: #000000;
+  background-image: radial-gradient(circle at 50% 0%, #0a1128 0%, #000000 70%);
+  color: #f3f4f6;
+  font-family: 'Courier New', Courier, monospace;
+  margin: 0;
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+#root > div {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+header {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 242, 255, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Transform metrics area into a grid */
+#root > div > div:nth-child(2) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+/* Glassmorphism style for all metric and status cards */
+#root > div > div div, 
+.bg-slate-900, 
+[class*="bg-slate-900"] {
+  background: rgba(10, 15, 30, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(0, 242, 255, 0.15) !important;
+  border-radius: 12px !important;
+  padding: 1.25rem !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6) !important;
+  transition: all 0.3s ease;
+}
+
+#root > div > div div:hover {
+  border-color: rgba(0, 242, 255, 0.4);
+  box-shadow: 0 20px 40px -15px rgba(0, 242, 255, 0.2);
+  transform: translateY(-2px);
+}
