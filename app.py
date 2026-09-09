@@ -1,70 +1,63 @@
 import datetime
-from flask import Flask, render_template, request, jsonify
+import json
+import os
+from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-# In-memory storage for real-time attack logs
-ATTACK_EVENTS = []
+ATTACK_EVENTS = [
+    { "source": "192.168.1.105", "dest": "10.0.0.4 (Honey)", "service": "SSH", "decision": "TARPIT", "severity": "HIGH" },
+    { "source": "45.33.32.156", "dest": "10.0.0.8 (SQL)", "service": "POSTGRES", "decision": "BLOCKED", "severity": "CRITICAL" },
+    { "source": "10.0.0.12", "dest": "10.0.0.1 (Gateway)", "service": "HTTP", "decision": "ALLOW", "severity": "LOW" }
+]
 
 @app.route('/')
-def dashboard():
-    return render_template('dashboard.html')
+def index():
+    return jsonify({
+        "status": "ONLINE",
+        "system": "PhantomNet SOC WebSocket Server V2.0",
+        "endpoints": ["/api/events", "/api/event"]
+    }), 200
 
 @app.route('/api/event', methods=['POST'])
 def handle_event():
     data = request.get_json(silent=True) or {}
     
     event = {
-        "id": len(ATTACK_EVENTS) + 1,
+        "source": data.get("source", "192.168.1.150"),
+        "dest": data.get("dest", "10.0.0.4 (Honey)"),
+        "service": data.get("service", "SSH"),
+        "decision": data.get("decision", "TARPIT"),
+        "severity": data.get("severity", "HIGH"),
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "type": data.get("type", "UNKNOWN"),
-        "path": data.get("path", "/unknown"),
-        "bytes": data.get("bytes", 0),
-        "payload": data.get("payload", "")
+        "payload": data.get("payload", "Unauthorized shell probe detected")
     }
     
-    ATTACK_EVENTS.insert(0, event)  # Newest first
-    if len(ATTACK_EVENTS) > 100:   # Keep last 100 events
+    ATTACK_EVENTS.insert(0, event)
+    if len(ATTACK_EVENTS) > 50:
         ATTACK_EVENTS.pop()
         
-    return jsonify({"status": "success", "event_id": event["id"]}), 200
+    socketio.emit('telemetry_update', {
+        "active_sessions": 27 + len(ATTACK_EVENTS),
+        "high_severity": sum(1 for e in ATTACK_EVENTS if e['severity'] in ['HIGH', 'CRITICAL']),
+        "network_flows": 1489 + len(ATTACK_EVENTS),
+        "stream": f"Intercepted {event['service']} probe from {event['source']} -> action: {event['decision']}",
+        "flows": ATTACK_EVENTS
+    })
+    
+    return jsonify({"status": "success", "event": event}), 200
 
 @app.route('/api/events', methods=['GET'])
 def get_events():
     return jsonify({
         "total": len(ATTACK_EVENTS),
-        "events": ATTACK_EVENTS
+        "flows": ATTACK_EVENTS
     }), 200
 
-@app.route('/api/clear', methods=['POST'])
-def clear_events():
-    global ATTACK_EVENTS
-    ATTACK_EVENTS = []
-    return jsonify({"status": "cleared"}), 200
-
 if __name__ == '__main__':
-    print("🚀 Starting PhantomNet Dashboard on http://0.0.0.0:5050")
-    app.run(host='0.0.0.0', port=5050, debug=False)
-import json
-import os
-from flask import Flask, render_template
-
-app = Flask(__name__)
-LOG_FILE = "/root/phantomnet/logs/attacks.json"
-
-@app.route('/')
-def index():
-    events = []
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r") as f:
-            for line in f:
-                if line.strip():
-                    events.append(json.loads(line.strip()))
-    # Reverse so newest events show first
-    events.reverse()
-    return render_template('dashboard.html', events=events)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5050)
+    print("🚀 Starting PhantomNet SOC WebSocket Server on http://0.0.0.0:5050")
+    socketio.run(app, host='0.0.0.0', port=5050, debug=False, allow_unsafe_werkzeug=True)
