@@ -15,18 +15,22 @@ ATTACK_EVENTS = [
     { "source": "10.0.0.12", "dest": "10.0.0.1 (Gateway)", "service": "HTTP", "decision": "ALLOW", "severity": "LOW" }
 ]
 
+HONEY_LOGS = [
+    {"source": "203.0.113.42", "command": "uname -a", "timestamp": "21:40:12"},
+    {"source": "192.168.1.105", "command": "cat /etc/passwd", "timestamp": "21:42:05"}
+]
+
 @app.route('/')
 def index():
     return jsonify({
         "status": "ONLINE",
         "system": "PhantomNet SOC WebSocket Server V2.0",
-        "endpoints": ["/api/events", "/api/event"]
+        "endpoints": ["/api/events", "/api/event", "/api/honey/command"]
     }), 200
 
 @app.route('/api/event', methods=['POST'])
 def handle_event():
     data = request.get_json(silent=True) or {}
-    
     event = {
         "source": data.get("source", "192.168.1.150"),
         "dest": data.get("dest", "10.0.0.4 (Honey)"),
@@ -36,7 +40,6 @@ def handle_event():
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "payload": data.get("payload", "Unauthorized shell probe detected")
     }
-    
     ATTACK_EVENTS.insert(0, event)
     if len(ATTACK_EVENTS) > 50:
         ATTACK_EVENTS.pop()
@@ -48,15 +51,23 @@ def handle_event():
         "stream": f"Intercepted {event['service']} probe from {event['source']} -> action: {event['decision']}",
         "flows": ATTACK_EVENTS
     })
-    
     return jsonify({"status": "success", "event": event}), 200
+
+@app.route('/api/honey/command', methods=['POST'])
+def handle_honey_command():
+    data = request.get_json(silent=True) or {}
+    cmd = data.get("command", "whoami")
+    source_ip = data.get("source", "203.0.113.42")
+    ts = datetime.datetime.now().strftime("%H:%M:%S")
+    
+    entry = {"source": source_ip, "command": cmd, "timestamp": ts}
+    HONEY_LOGS.insert(0, entry)
+    socketio.emit('honey_log', entry)
+    return jsonify({"status": "intercepted", "entry": entry}), 200
 
 @app.route('/api/events', methods=['GET'])
 def get_events():
-    return jsonify({
-        "total": len(ATTACK_EVENTS),
-        "flows": ATTACK_EVENTS
-    }), 200
+    return jsonify({"total": len(ATTACK_EVENTS), "flows": ATTACK_EVENTS}), 200
 
 if __name__ == '__main__':
     print("🚀 Starting PhantomNet SOC WebSocket Server on http://0.0.0.0:5050")
