@@ -24,6 +24,12 @@ export default function App() {
     { source: '192.168.1.105', command: 'cat /etc/passwd', timestamp: '21:42:05' }
   ]);
 
+  const [aiModelsState, setAiModelsState] = useState([
+    { name: 'sql_model', role: 'Database Generation', status: 'READY', latency: '42ms' },
+    { name: 'lore_model', role: 'Corporate Environment', status: 'READY', latency: '38ms' },
+    { name: 'threat_evaluator', role: 'Payload Classification', status: 'STANDBY', latency: '65ms' }
+  ]);
+
   const [inputCommand, setInputCommand] = useState('');
   const [inputSource, setInputSource] = useState('192.168.1.200');
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -55,6 +61,16 @@ export default function App() {
     });
     
     setInputCommand('');
+  };
+
+  const toggleModelStatus = (index) => {
+    setAiModelsState(prev => prev.map((model, idx) => {
+      if (idx === index) {
+        const nextStatus = model.status === 'READY' ? 'STANDBY' : 'READY';
+        return { ...model, status: nextStatus };
+      }
+      return model;
+    }));
   };
 
   const COL_PLASMA_BLUE = '#00f2ff';
@@ -161,18 +177,14 @@ export default function App() {
 
               <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold' }}>AI MODEL STATUS</div>
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                    <span>sql_model</span><span style={{ color: '#34d399' }}>READY</span>
+                {aiModelsState.slice(0, 2).map((m, i) => (
+                  <div key={i} style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                      <span>{m.name}</span><span style={{ color: m.status === 'READY' ? '#34d399' : '#f59e0b' }}>{m.status}</span>
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '0.2rem' }}>{m.role} • {m.latency}</div>
                   </div>
-                  <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '0.2rem' }}>Database Generation</div>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                    <span>lore_model</span><span style={{ color: '#34d399' }}>READY</span>
-                  </div>
-                  <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '0.2rem' }}>Corporate Environment</div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -261,7 +273,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Interactive Simulation Input Box */}
               <div style={cardStyle}>
                 <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SIMULATE ATTACKER COMMAND</div>
                 <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Inject commands directly into honey stream</span>
@@ -311,8 +322,34 @@ export default function App() {
           </div>
         )}
 
+        {/* AI STATUS TAB */}
+        {activeTab === 'AI Status' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
+            {aiModelsState.map((model, idx) => (
+              <div key={idx} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: COL_PLASMA_BLUE, fontWeight: 'bold' }}>{model.name}</div>
+                  <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>{model.role}</span>
+                </div>
+                
+                <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${COL_PLASMA_BLUE}22`, display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                  <span>Status: <strong style={{ color: model.status === 'READY' ? '#34d399' : '#f59e0b' }}>{model.status}</strong></span>
+                  <span style={{ color: '#9ca3af' }}>{model.latency}</span>
+                </div>
+
+                <button 
+                  onClick={() => toggleModelStatus(idx)}
+                  style={{ background: model.status === 'READY' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(52, 211, 153, 0.2)', border: `1px solid ${model.status === 'READY' ? '#ef4444' : '#34d399'}`, color: model.status === 'READY' ? '#ef4444' : '#34d399', padding: '0.5rem', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', fontFamily: FONT_MONO }}
+                >
+                  Toggle {model.status === 'READY' ? 'Standby' : 'Ready'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* OTHER TABS */}
-        {activeTab !== 'Overview' && activeTab !== 'Honey/SSH' && (
+        {activeTab !== 'Overview' && activeTab !== 'Honey/SSH' && activeTab !== 'AI Status' && (
           <div style={cardStyle}>
             <div style={{ fontSize: '1rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.5rem' }}>{activeTab} Module View</div>
             <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: 0 }}>
