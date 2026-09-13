@@ -72,3 +72,21 @@ def get_events():
 if __name__ == '__main__':
     print("🚀 Starting PhantomNet SOC WebSocket Server on http://0.0.0.0:5050")
     socketio.run(app, host='0.0.0.0', port=5050, debug=False, allow_unsafe_werkzeug=True)
+
+@app.route('/api/sqli/intercept', methods=['POST'])
+def handle_sqli_intercept():
+    data = request.get_json(silent=True) or {}
+    payload = data.get("payload", "' OR '1'='1")
+    source_ip = data.get("source", "45.33.32.156")
+    ts = datetime.datetime.now().strftime("%H:%M:%S")
+    
+    entry = {
+        "source": source_ip, 
+        "payload": payload, 
+        "decision": "BLOCKED", 
+        "severity": "CRITICAL", 
+        "timestamp": ts
+    }
+    
+    socketio.emit('sqli_log', entry)
+    return jsonify({"status": "intercepted", "entry": entry}), 200
