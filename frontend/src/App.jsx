@@ -24,6 +24,10 @@ export default function App() {
     { source: '192.168.1.105', command: 'cat /etc/passwd', timestamp: '21:42:05' }
   ]);
 
+  const [sqliLogs, setSqliLogs] = useState([
+    { source: '45.33.32.156', payload: "' OR '1'='1", decision: 'BLOCKED', severity: 'CRITICAL', timestamp: '21:45:10' }
+  ]);
+
   const [aiModelsState, setAiModelsState] = useState([
     { name: 'sql_model', role: 'Database Generation', status: 'READY', latency: '42ms' },
     { name: 'lore_model', role: 'Corporate Environment', status: 'READY', latency: '38ms' },
@@ -32,6 +36,10 @@ export default function App() {
 
   const [inputCommand, setInputCommand] = useState('');
   const [inputSource, setInputSource] = useState('192.168.1.200');
+  
+  const [sqliPayload, setSqliPayload] = useState("' UNION SELECT null, username, password FROM users--");
+  const [sqliSource, setSqliSource] = useState('192.168.1.199');
+
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [filterSeverity, setFilterSeverity] = useState('ALL');
   const [activeTab, setActiveTab] = useState('Overview');
@@ -45,6 +53,10 @@ export default function App() {
 
     socket.on('honey_log', (logEntry) => {
       setHoneyLogs(prev => [logEntry, ...prev]);
+    });
+
+    socket.on('sqli_log', (logEntry) => {
+      setSqliLogs(prev => [logEntry, ...prev]);
     });
 
     return () => socket.disconnect();
@@ -61,6 +73,19 @@ export default function App() {
     });
     
     setInputCommand('');
+  };
+
+  const sendSqliPayload = async (e) => {
+    e.preventDefault();
+    if (!sqliPayload.trim()) return;
+
+    await fetch('http://localhost:5050/api/sqli/intercept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: sqliSource, payload: sqliPayload })
+    });
+
+    setSqliPayload('');
   };
 
   const toggleModelStatus = (index) => {
@@ -322,6 +347,71 @@ export default function App() {
           </div>
         )}
 
+        {/* SQLI GUARD TAB */}
+        {activeTab === 'SQLi Guard' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={cardStyle}>
+                <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SQL INJECTION GUARDWALL</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Real-time backend parameter interception</span>
+                <div style={{ background: 'rgba(0,0,0,0.5)', padding: '1rem', borderRadius: '8px', fontSize: '0.75rem', color: '#ef4444', fontFamily: FONT_MONO, border: `1px solid ${COL_PLASMA_BLUE}22` }}>
+                  [+] Status: ACTIVE & BLOCKING<br/>
+                  [+] Model Classifier: sql_model (v2.4)<br/>
+                  [+] Action: Immediate query drop & tarpit response
+                </div>
+              </div>
+
+              <div style={cardStyle}>
+                <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SIMULATE SQL INJECTION PAYLOAD</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Test query sanitization & interception logs</span>
+                <form onSubmit={sendSqliPayload} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', color: '#9ca3af', display: 'block', marginBottom: '0.2rem' }}>Source IP</label>
+                    <input 
+                      type="text" 
+                      value={sqliSource} 
+                      onChange={(e) => setSqliSource(e.target.value)}
+                      style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: `1px solid ${COL_PLASMA_BLUE}33`, borderRadius: '6px', padding: '0.5rem', color: '#fff', fontSize: '0.75rem', fontFamily: FONT_MONO }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.65rem', color: '#9ca3af', display: 'block', marginBottom: '0.2rem' }}>SQL Payload</label>
+                    <input 
+                      type="text" 
+                      value={sqliPayload} 
+                      onChange={(e) => setSqliPayload(e.target.value)}
+                      placeholder="e.g. ' OR 1=1--"
+                      style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: `1px solid ${COL_PLASMA_BLUE}33`, borderRadius: '6px', padding: '0.5rem', color: '#ef4444', fontSize: '0.75rem', fontFamily: FONT_MONO }}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#ef4444', padding: '0.5rem', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', fontFamily: FONT_MONO }}
+                  >
+                    Fire SQL Interception Test
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>LIVE SQLI INTERCEPTION LOGS</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Blocked queries stream</span>
+              <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
+                {sqliLogs.map((log, idx) => (
+                  <div key={idx} style={{ background: 'rgba(0,0,0,0.4)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)', fontFamily: FONT_MONO }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                      <span style={{ color: '#6b7280', fontSize: '0.65rem' }}>[{log.timestamp}]</span>
+                      <span style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '0.65rem' }}>{log.decision} ({log.severity})</span>
+                    </div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>{log.source}</strong>: <span style={{ color: '#fca5a5' }}>{log.payload}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* AI STATUS TAB */}
         {activeTab === 'AI Status' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
@@ -349,7 +439,7 @@ export default function App() {
         )}
 
         {/* OTHER TABS */}
-        {activeTab !== 'Overview' && activeTab !== 'Honey/SSH' && activeTab !== 'AI Status' && (
+        {activeTab !== 'Overview' && activeTab !== 'Honey/SSH' && activeTab !== 'SQLi Guard' && activeTab !== 'AI Status' && (
           <div style={cardStyle}>
             <div style={{ fontSize: '1rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.5rem' }}>{activeTab} Module View</div>
             <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: 0 }}>
