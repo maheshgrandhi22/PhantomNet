@@ -13,9 +13,10 @@ export default function App() {
     sql_interceptions: 1,
     tarpit_delay: '0.8s',
     flows: [
-      { source: '192.168.1.105', dest: '10.0.0.4 (Honey)', service: 'SSH', decision: 'TARPIT', severity: 'HIGH' },
-      { source: '45.33.32.156', dest: '10.0.0.8 (SQL)', service: 'POSTGRES', decision: 'BLOCKED', severity: 'CRITICAL' },
-      { source: '10.0.0.12', dest: '10.0.0.1 (Gateway)', service: 'HTTP', decision: 'ALLOW', severity: 'LOW' }
+      { source: '192.168.1.105', dest: '10.0.0.4 (Honey)', service: 'SSH', decision: 'TARPIT', severity: 'HIGH', bytes: '14.2 KB', protocol: 'TCP (eBPF)' },
+      { source: '45.33.32.156', dest: '10.0.0.8 (SQL)', service: 'POSTGRES', decision: 'BLOCKED', severity: 'CRITICAL', bytes: '4.8 KB', protocol: 'TCP (eBPF)' },
+      { source: '10.0.0.12', dest: '10.0.0.1 (Gateway)', service: 'HTTP', decision: 'ALLOW', severity: 'LOW', bytes: '128.4 KB', protocol: 'HTTP/2' },
+      { source: '172.16.0.22', dest: '10.0.0.5 (Internal)', service: 'DNS', decision: 'ALLOW', severity: 'LOW', bytes: '1.2 KB', protocol: 'UDP' }
     ]
   });
 
@@ -42,7 +43,7 @@ export default function App() {
 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [filterSeverity, setFilterSeverity] = useState('ALL');
-  const [activeTab, setActiveTab] = useState('Overview');
+  const [activeTab, setActiveTab] = useState('Network Flows');
 
   useEffect(() => {
     const socket = io('http://localhost:5050');
@@ -212,76 +213,84 @@ export default function App() {
                 ))}
               </div>
             </div>
+          </>
+        )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
-              <div style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold' }}>NETWORK FLOWS</div>
-                    <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>eBPF Flow Telemetry</span>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    {['ALL', 'CRITICAL', 'HIGH', 'LOW'].map((lvl) => (
-                      <button
-                        key={lvl}
-                        onClick={() => setFilterSeverity(lvl)}
-                        style={{
-                          background: filterSeverity === lvl ? `${COL_PLASMA_BLUE}22` : 'rgba(0,0,0,0.3)',
-                          border: `1px solid ${filterSeverity === lvl ? COL_PLASMA_BLUE : 'rgba(255,255,255,0.1)'}`,
-                          color: filterSeverity === lvl ? COL_PLASMA_BLUE : '#9ca3af',
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: '4px',
-                          fontSize: '0.65rem',
-                          cursor: 'pointer',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        {lvl}
-                      </button>
-                    ))}
-                  </div>
+        {/* NETWORK FLOWS TAB */}
+        {activeTab === 'Network Flows' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold' }}>eBPF PACKET INSPECTION & FLOWS</div>
+                  <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>Kernel-level socket filter telemetry</span>
                 </div>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
-                  <span>SOURCE</span>
-                  <span>DESTINATION</span>
-                  <span>SERVICE</span>
-                  <span>DECISION</span>
-                  <span>SEVERITY</span>
-                </div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', minHeight: '110px' }}>
-                  {filteredFlows.length > 0 ? (
-                    filteredFlows.map((flow, idx) => (
-                      <div key={idx} onClick={() => setSelectedEvent(flow)} style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', fontSize: '0.7rem', padding: '0.4rem 0', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                        <span style={{ color: '#9ca3af' }}>{flow.source}</span>
-                        <span style={{ color: '#9ca3af' }}>{flow.dest}</span>
-                        <span style={{ color: '#fff' }}>{flow.service}</span>
-                        <span style={{ color: flow.decision === 'BLOCKED' ? '#ef4444' : '#34d399' }}>{flow.decision}</span>
-                        <span style={{ color: flow.severity === 'CRITICAL' ? '#ef4444' : flow.severity === 'HIGH' ? '#f59e0b' : '#34d399' }}>{flow.severity}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ color: '#6b7280', fontSize: '0.7rem', textAlign: 'center', padding: '1.5rem' }}>No flows match severity filter [{filterSeverity}]</div>
-                  )}
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  {['ALL', 'CRITICAL', 'HIGH', 'LOW'].map((lvl) => (
+                    <button
+                      key={lvl}
+                      onClick={() => setFilterSeverity(lvl)}
+                      style={{
+                        background: filterSeverity === lvl ? `${COL_PLASMA_BLUE}22` : 'rgba(0,0,0,0.3)',
+                        border: `1px solid ${filterSeverity === lvl ? COL_PLASMA_BLUE : 'rgba(255,255,255,0.1)'}`,
+                        color: filterSeverity === lvl ? COL_PLASMA_BLUE : '#9ca3af',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.65rem',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
                 </div>
               </div>
-
-              <div style={cardStyle}>
-                <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.2rem' }}>EVENT INSPECTOR</div>
-                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Selected telemetry event</span>
-                
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.75rem', color: '#9ca3af', minHeight: '100px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
-                  {selectedEvent ? (
-                    <pre style={{ margin: 0, fontFamily: FONT_MONO, color: COL_PLASMA_BLUE }}>{JSON.stringify(selectedEvent, null, 2)}</pre>
-                  ) : (
-                    'Select an event from the network flows table.'
-                  )}
-                </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem', marginBottom: '0.5rem' }}>
+                <span>SOURCE</span>
+                <span>DESTINATION</span>
+                <span>SERVICE</span>
+                <span>DECISION</span>
+                <span>SEVERITY</span>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', minHeight: '220px' }}>
+                {filteredFlows.length > 0 ? (
+                  filteredFlows.map((flow, idx) => (
+                    <div key={idx} onClick={() => setSelectedEvent(flow)} style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', fontSize: '0.7rem', padding: '0.5rem 0', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.03)', background: selectedEvent === flow ? `${COL_PLASMA_BLUE}11` : 'transparent' }}>
+                      <span style={{ color: '#9ca3af' }}>{flow.source}</span>
+                      <span style={{ color: '#9ca3af' }}>{flow.dest}</span>
+                      <span style={{ color: '#fff' }}>{flow.service}</span>
+                      <span style={{ color: flow.decision === 'BLOCKED' ? '#ef4444' : flow.decision === 'TARPIT' ? '#f59e0b' : '#34d399' }}>{flow.decision}</span>
+                      <span style={{ color: flow.severity === 'CRITICAL' ? '#ef4444' : flow.severity === 'HIGH' ? '#f59e0b' : '#34d399' }}>{flow.severity}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ color: '#6b7280', fontSize: '0.7rem', textAlign: 'center', padding: '2rem' }}>No flows match severity filter [{filterSeverity}]</div>
+                )}
               </div>
             </div>
-          </>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.2rem' }}>eBPF PACKET INSPECTOR</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Detailed telemetry attributes</span>
+              
+              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.75rem', color: '#9ca3af', minHeight: '180px', border: `1px solid ${COL_PLASMA_BLUE}1a` }}>
+                {selectedEvent ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Protocol:</strong> {selectedEvent.protocol}</div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Volume:</strong> {selectedEvent.bytes}</div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Action Taken:</strong> {selectedEvent.decision}</div>
+                    <pre style={{ margin: '0.5rem 0 0 0', fontFamily: FONT_MONO, color: '#34d399', fontSize: '0.65rem', background: 'rgba(0,0,0,0.5)', padding: '0.5rem', borderRadius: '4px' }}>{JSON.stringify(selectedEvent, null, 2)}</pre>
+                  </div>
+                ) : (
+                  'Select a network flow record from the table to inspect kernel-level eBPF metadata.'
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* HONEY/SSH TAB */}
@@ -439,7 +448,7 @@ export default function App() {
         )}
 
         {/* OTHER TABS */}
-        {activeTab !== 'Overview' && activeTab !== 'Honey/SSH' && activeTab !== 'SQLi Guard' && activeTab !== 'AI Status' && (
+        {activeTab !== 'Overview' && activeTab !== 'Network Flows' && activeTab !== 'Honey/SSH' && activeTab !== 'SQLi Guard' && activeTab !== 'AI Status' && (
           <div style={cardStyle}>
             <div style={{ fontSize: '1rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.5rem' }}>{activeTab} Module View</div>
             <p style={{ fontSize: '0.8rem', color: '#9ca3af', margin: 0 }}>
