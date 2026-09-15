@@ -35,6 +35,25 @@ export default function App() {
     { name: 'threat_evaluator', role: 'Payload Classification', status: 'STANDBY', latency: '60ms' }
   ]);
 
+  const [soarRules, setSoarRules] = useState([
+    { id: 1, name: 'Auto-Tarpit Bruteforce SSH', trigger: 'Failed logins > 5', action: 'Isolate to Honeypot', enabled: true },
+    { id: 2, name: 'SQL Injection Nullifier', trigger: 'Signature match in payload', action: 'Drop & Blacklist IP', enabled: true },
+    { id: 3, name: 'High-Risk Subnet Quarantine', trigger: 'Risk score > 85', action: 'Kernel Drop (eBPF)', enabled: false }
+  ]);
+
+  const [rbacUsers, setRbacUsers] = useState([
+    { id: 1, username: 'mahesh_admin', role: 'Super Admin', mfa: 'Enabled', status: 'Active', lastAccess: 'Just now' },
+    { id: 2, username: 'sec_analyst_01', role: 'SOC Analyst', mfa: 'Enabled', status: 'Active', lastAccess: '12m ago' },
+    { id: 3, username: 'incident_resp_02', role: 'Incident Responder', mfa: 'Disabled', status: 'Active', lastAccess: '1h ago' },
+    { id: 4, username: 'auditor_read_01', role: 'Auditor (Read-Only)', mfa: 'Enabled', status: 'Suspended', lastAccess: '3d ago' }
+  ]);
+
+  const [auditTrails, setAuditTrails] = useState([
+    { user: 'mahesh_admin', action: 'Modified SOAR Playbook #1', category: 'POLICY', timestamp: '21:55:10' },
+    { user: 'sec_analyst_01', action: 'Exported JSON Telemetry Report', category: 'COMPLIANCE', timestamp: '21:48:30' },
+    { user: 'mahesh_admin', action: 'Toggled Model [threat_evaluator] to STANDBY', category: 'AI_OPS', timestamp: '21:30:04' }
+  ]);
+
   const [inputCommand, setInputCommand] = useState('');
   const [inputSource, setInputSource] = useState('192.168.1.200');
   
@@ -45,6 +64,8 @@ export default function App() {
   const [filterSeverity, setFilterSeverity] = useState('ALL');
   const [activeTab, setActiveTab] = useState('Overview');
   const [exportStatus, setExportStatus] = useState('');
+  const [soarStatus, setSoarStatus] = useState('');
+  const [rbacStatus, setRbacStatus] = useState('');
 
   useEffect(() => {
     const socket = io('http://localhost:5050');
@@ -100,9 +121,33 @@ export default function App() {
     }));
   };
 
+  const toggleSoarRule = (id) => {
+    setSoarRules(prev => prev.map(rule => {
+      if (rule.id === id) {
+        const nextState = !rule.enabled;
+        setSoarStatus(`SOAR Playbook [${rule.name}] is now ${nextState ? 'ACTIVE' : 'DISABLED'}`);
+        setTimeout(() => setSoarStatus(''), 4000);
+        return { ...rule, enabled: nextState };
+      }
+      return rule;
+    }));
+  };
+
+  const toggleUserStatus = (id) => {
+    setRbacUsers(prev => prev.map(u => {
+      if (u.id === id) {
+        const nextStatus = u.status === 'Active' ? 'Suspended' : 'Active';
+        setRbacStatus(`User account [${u.username}] status updated to ${nextStatus}`);
+        setTimeout(() => setRbacStatus(''), 4000);
+        return { ...u, status: nextStatus };
+      }
+      return u;
+    }));
+  };
+
   const exportReport = (format) => {
     const dataStr = format === 'json' 
-      ? JSON.stringify({ telemetry, honeyLogs, sqliLogs }, null, 2)
+      ? JSON.stringify({ telemetry, honeyLogs, sqliLogs, soarRules, rbacUsers }, null, 2)
       : 'Source,Destination,Service,Decision,Severity,Protocol,Timestamp\n' + telemetry.flows.map(f => `${f.source},${f.dest},${f.service},${f.decision},${f.severity},${f.protocol},${f.timestamp || 'N/A'}`).join('\n');
     
     const blob = new Blob([dataStr], { type: format === 'json' ? 'application/json' : 'text/csv' });
@@ -150,7 +195,7 @@ export default function App() {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.85rem' }}>
-          {['Overview', 'Sessions', 'Network Flows', 'Honey/SSH', 'SQLi Guard', 'AI Status', 'Threat Analytics'].map((item) => {
+          {['Overview', 'Sessions', 'Network Flows', 'Honey/SSH', 'SQLi Guard', 'AI Status', 'Threat Analytics', 'SOAR Playbooks', 'Access Control (RBAC)'].map((item) => {
             const isActive = activeTab === item;
             return (
               <button
@@ -471,7 +516,7 @@ export default function App() {
           </div>
         )}
 
-        {/* THREAT ANALYTICS TAB (DAY 5) */}
+        {/* THREAT ANALYTICS TAB */}
         {activeTab === 'Threat Analytics' && (
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -542,6 +587,133 @@ export default function App() {
                 <div style={{ background: 'rgba(0,0,0,0.4)', padding: '0.8rem', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}22`, display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#9ca3af' }}>Socket State:</span>
                   <span style={{ color: '#34d399', fontWeight: 'bold' }}>CONNECTED</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SOAR PLAYBOOKS TAB */}
+        {activeTab === 'SOAR Playbooks' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>AUTOMATED SECURITY ORCHESTRATION (SOAR)</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1.2rem' }}>Configure automated incident response workflows & kernel mitigation triggers</span>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {soarRules.map((rule) => (
+                  <div key={rule.id} style={{ background: 'rgba(0,0,0,0.4)', padding: '1rem 1.2rem', borderRadius: '10px', border: `1px solid ${rule.enabled ? COL_PLASMA_BLUE + '44' : 'rgba(255,255,255,0.08)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#fff', marginBottom: '0.2rem' }}>{rule.name}</div>
+                      <div style={{ fontSize: '0.65rem', color: '#9ca3af' }}>Trigger: <span style={{ color: COL_PLASMA_BLUE }}>{rule.trigger}</span> | Action: <span style={{ color: '#34d399' }}>{rule.action}</span></div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => toggleSoarRule(rule.id)}
+                      style={{ 
+                        background: rule.enabled ? 'rgba(52, 211, 153, 0.2)' : 'rgba(239, 68, 68, 0.2)', 
+                        border: `1px solid ${rule.enabled ? '#34d399' : '#ef4444'}`, 
+                        color: rule.enabled ? '#34d399' : '#ef4444', 
+                        padding: '0.5rem 1rem', 
+                        borderRadius: '6px', 
+                        fontWeight: 'bold', 
+                        fontSize: '0.7rem', 
+                        cursor: 'pointer', 
+                        fontFamily: FONT_MONO 
+                      }}
+                    >
+                      {rule.enabled ? 'ACTIVE' : 'DISABLED'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {soarStatus && (
+                <div style={{ marginTop: '1.2rem', padding: '0.7rem', background: `${COL_PLASMA_BLUE}1a`, border: `1px solid ${COL_PLASMA_BLUE}`, borderRadius: '6px', fontSize: '0.75rem', color: COL_PLASMA_BLUE }}>
+                  {soarStatus}
+                </div>
+              )}
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>SOAR ENGINE STATUS</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Automated remediation daemon</span>
+              
+              <div style={{ background: 'rgba(0,0,0,0.5)', padding: '1.2rem', borderRadius: '10px', fontSize: '0.75rem', color: '#34d399', fontFamily: FONT_MONO, border: `1px solid ${COL_PLASMA_BLUE}33`, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div>[+] Playbook Engine: ONLINE</div>
+                <div>[+] Latency: &lt; 2ms response</div>
+                <div>[+] Active Triggers: {soarRules.filter(r => r.enabled).length} rules</div>
+                <div>[+] Auto-Quarantine: READY</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ACCESS CONTROL (RBAC) TAB (DAY 7) */}
+        {activeTab === 'Access Control (RBAC)' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>MULTI-TENANT ROLE-BASED ACCESS CONTROL</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1.2rem' }}>Manage operator accounts, privilege tiers, and security access levels</span>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                <span>USERNAME</span>
+                <span>ROLE</span>
+                <span>MFA</span>
+                <span>STATUS</span>
+                <span>ACTION</span>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {rbacUsers.map((user) => (
+                  <div key={user.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', fontSize: '0.75rem', padding: '0.7rem 0.4rem', alignItems: 'center', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}22` }}>
+                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{user.username}</span>
+                    <span style={{ color: COL_PLASMA_BLUE }}>{user.role}</span>
+                    <span style={{ color: user.mfa === 'Enabled' ? '#34d399' : '#f59e0b' }}>{user.mfa}</span>
+                    <span style={{ color: user.status === 'Active' ? '#34d399' : '#ef4444', fontWeight: 'bold' }}>{user.status}</span>
+                    <button 
+                      onClick={() => toggleUserStatus(user.id)}
+                      style={{ 
+                        background: user.status === 'Active' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(52, 211, 153, 0.2)', 
+                        border: `1px solid ${user.status === 'Active' ? '#ef4444' : '#34d399'}`, 
+                        color: user.status === 'Active' ? '#ef4444' : '#34d399', 
+                        padding: '0.3rem 0.6rem', 
+                        borderRadius: '6px', 
+                        fontWeight: 'bold', 
+                        fontSize: '0.65rem', 
+                        cursor: 'pointer', 
+                        fontFamily: FONT_MONO 
+                      }}
+                    >
+                      {user.status === 'Active' ? 'Suspend' : 'Activate'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {rbacStatus && (
+                <div style={{ marginTop: '1.2rem', padding: '0.7rem', background: `${COL_PLASMA_BLUE}1a`, border: `1px solid ${COL_PLASMA_BLUE}`, borderRadius: '6px', fontSize: '0.75rem', color: COL_PLASMA_BLUE }}>
+                  {rbacStatus}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={cardStyle}>
+                <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>AUDIT TRAIL LOGS</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Immutable administrative action stream</span>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', maxHeight: '300px', overflowY: 'auto' }}>
+                  {auditTrails.map((audit, idx) => (
+                    <div key={idx} style={{ background: 'rgba(0,0,0,0.5)', padding: '0.7rem', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}22`, fontSize: '0.7rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                        <span style={{ color: COL_PLASMA_BLUE, fontWeight: 'bold' }}>{audit.user}</span>
+                        <span style={{ color: '#6b7280', fontSize: '0.6rem' }}>{audit.timestamp}</span>
+                      </div>
+                      <div style={{ color: '#fff' }}>{audit.action}</div>
+                      <div style={{ color: '#34d399', fontSize: '0.6rem', marginTop: '0.2rem' }}>[{audit.category}]</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
