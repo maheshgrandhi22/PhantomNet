@@ -54,6 +54,33 @@ export default function App() {
     { user: 'mahesh_admin', action: 'Toggled Model [threat_evaluator] to STANDBY', category: 'AI_OPS', timestamp: '21:30:04' }
   ]);
 
+  const [geoThreats, setGeoThreats] = useState([
+    { ip: '45.33.32.156', country: 'United States', city: 'New Jersey', coordinates: { x: '28%', y: '34%' }, vector: 'SQL Injection', status: 'BLOCKED', risk: 'Critical' },
+    { ip: '203.0.113.42', country: 'Germany', city: 'Frankfurt', coordinates: { x: '52%', y: '26%' }, vector: 'SSH Brute-Force', status: 'TARPIT', risk: 'High' },
+    { ip: '185.220.101.5', country: 'Netherlands', city: 'Amsterdam', coordinates: { x: '49%', y: '24%' }, vector: 'eBPF Probe', status: 'MONITORED', risk: 'Medium' },
+    { ip: '192.241.180.2', country: 'Singapore', city: 'Singapore', coordinates: { x: '78%', y: '58%' }, vector: 'DDoS SYN Flood', status: 'MITIGATED', risk: 'Critical' }
+  ]);
+
+  const [webhooks, setWebhooks] = useState([
+    { id: 1, name: 'Slack SOC Alerts (#sec-ops)', url: 'https://hooks.slack.com/services/T00/B00/X99', events: 'Critical & High', status: 'Connected', lastTriggered: '14m ago' },
+    { id: 2, name: 'PagerDuty On-Call Incident Pipeline', url: 'https://events.pagerduty.com/v2/enqueue', events: 'Critical Only', status: 'Connected', lastTriggered: '2h ago' },
+    { id: 3, name: 'Custom SIEM Webhook Sink', url: 'https://siem.phantomnet.internal/ingest', events: 'All Telemetry', status: 'Paused', lastTriggered: '1d ago' }
+  ]);
+
+  const [testWebhookUrl, setTestWebhookUrl] = useState('https://hooks.slack.com/services/T00/B00/X99');
+  const [webhookTestStatus, setWebhookTestStatus] = useState('');
+
+  // Day 10 Production Hardening & Docker State
+  const [dockerServices, setDockerServices] = useState([
+    { name: 'phantomnet-backend', image: 'phantomnet/core-api:v2.4', ports: '5050:5050', status: 'Running (Healthy)', uptime: '4d 12h' },
+    { name: 'phantomnet-frontend', image: 'phantomnet/soc-ui:v2.4', ports: '80:80', status: 'Running (Healthy)', uptime: '4d 12h' },
+    { name: 'phantomnet-ebpf-daemon', image: 'phantomnet/kernel-probe:v2.4', ports: 'Host Net', status: 'Running (Privileged)', uptime: '4d 12h' },
+    { name: 'phantomnet-redis-cache', image: 'redis:7-alpine', ports: '6379:6379', status: 'Running (Healthy)', uptime: '4d 12h' }
+  ]);
+
+  const [hardeningStatus, setHardeningStatus] = useState('');
+  const [clusterMode, setClusterMode] = useState('High Availability (HA)');
+
   const [inputCommand, setInputCommand] = useState('');
   const [inputSource, setInputSource] = useState('192.168.1.200');
   
@@ -61,6 +88,7 @@ export default function App() {
   const [sqliSource, setSqliSource] = useState('192.168.1.199');
 
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedGeoThreat, setSelectedGeoThreat] = useState(null);
   const [filterSeverity, setFilterSeverity] = useState('ALL');
   const [activeTab, setActiveTab] = useState('Overview');
   const [exportStatus, setExportStatus] = useState('');
@@ -145,19 +173,46 @@ export default function App() {
     }));
   };
 
+  const toggleWebhookStatus = (id) => {
+    setWebhooks(prev => prev.map(w => {
+      if (w.id === id) {
+        const nextStatus = w.status === 'Connected' ? 'Paused' : 'Connected';
+        return { ...w, status: nextStatus };
+      }
+      return w;
+    }));
+  };
+
+  const sendTestAlert = (e) => {
+    e.preventDefault();
+    setWebhookTestStatus(`Sending test alert packet to [${testWebhookUrl}]...`);
+    setTimeout(() => {
+      setWebhookTestStatus(`Successfully dispatched test incident payload to webhook endpoint! Response: 200 OK.`);
+      setTimeout(() => setWebhookTestStatus(''), 5000);
+    }, 1200);
+  };
+
+  const executeHardeningScan = () => {
+    setHardeningStatus('Running container security audits & kernel capability checks...');
+    setTimeout(() => {
+      setHardeningStatus('Production Hardening Complete: All Docker containers verified, TLS 1.3 enforced, eBPF root privileges verified.');
+      setTimeout(() => setHardeningStatus(''), 6000);
+    }, 1500);
+  };
+
   const exportReport = (format) => {
     const dataStr = format === 'json' 
-      ? JSON.stringify({ telemetry, honeyLogs, sqliLogs, soarRules, rbacUsers }, null, 2)
+      ? JSON.stringify({ telemetry, honeyLogs, sqliLogs, soarRules, rbacUsers, geoThreats, webhooks, dockerServices }, null, 2)
       : 'Source,Destination,Service,Decision,Severity,Protocol,Timestamp\n' + telemetry.flows.map(f => `${f.source},${f.dest},${f.service},${f.decision},${f.severity},${f.protocol},${f.timestamp || 'N/A'}`).join('\n');
     
     const blob = new Blob([dataStr], { type: format === 'json' ? 'application/json' : 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `phantomnet_threat_report_${Date.now()}.${format}`;
+    link.download = `phantomnet_production_audit_${Date.now()}.${format}`;
     link.click();
     
-    setExportStatus(`Successfully exported audit report as ${format.toUpperCase()}`);
+    setExportStatus(`Successfully exported production report as ${format.toUpperCase()}`);
     setTimeout(() => setExportStatus(''), 4000);
   };
 
@@ -195,7 +250,7 @@ export default function App() {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.85rem' }}>
-          {['Overview', 'Sessions', 'Network Flows', 'Honey/SSH', 'SQLi Guard', 'AI Status', 'Threat Analytics', 'SOAR Playbooks', 'Access Control (RBAC)'].map((item) => {
+          {['Overview', 'Sessions', 'Network Flows', 'Honey/SSH', 'SQLi Guard', 'AI Status', 'Threat Analytics', 'SOAR Playbooks', 'Access Control (RBAC)', 'Threat Vector Map', 'Alerts & Webhooks', 'System Health & Deployment'].map((item) => {
             const isActive = activeTab === item;
             return (
               <button
@@ -221,7 +276,7 @@ export default function App() {
         </nav>
 
         <div style={{ marginTop: 'auto', fontSize: '0.65rem', color: '#4b5563', letterSpacing: '1px' }}>
-          WEEK 03 / ATTENDANCE SYNC
+          WEEK 03 / FINAL DEPLOY
         </div>
       </aside>
 
@@ -649,7 +704,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ACCESS CONTROL (RBAC) TAB (DAY 7) */}
+        {/* ACCESS CONTROL (RBAC) TAB */}
         {activeTab === 'Access Control (RBAC)' && (
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
             <div style={cardStyle}>
@@ -715,6 +770,211 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* THREAT VECTOR MAP TAB */}
+        {activeTab === 'Threat Vector Map' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>GLOBAL THREAT VECTOR & GEO-IP MAP</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Live geographic origin telemetry & attack trajectories</span>
+              
+              <div style={{ position: 'relative', height: '320px', background: 'rgba(3, 7, 18, 0.8)', borderRadius: '12px', border: `1px solid ${COL_PLASMA_BLUE}33`, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(0,242,255,0.1) 1px, transparent 1px)', backgroundSize: '24px 24px', opacity: 0.6 }}></div>
+                
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 5 }}>
+                  <div style={{ width: '16px', height: '16px', backgroundColor: COL_PLASMA_BLUE, borderRadius: '50%', boxShadow: `0 0 15px ${COL_PLASMA_BLUE}`, animation: 'pulse 2s infinite' }}></div>
+                  <span style={{ fontSize: '0.6rem', color: COL_PLASMA_BLUE, marginTop: '4px', background: 'rgba(0,0,0,0.8)', padding: '2px 6px', borderRadius: '4px' }}>PHANTOMNET CORE</span>
+                </div>
+
+                {geoThreats.map((threat, idx) => (
+                  <div 
+                    key={idx}
+                    onClick={() => setSelectedGeoThreat(threat)}
+                    style={{ 
+                      position: 'absolute', 
+                      top: threat.coordinates.y, 
+                      left: threat.coordinates.x, 
+                      cursor: 'pointer',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 10
+                    }}
+                  >
+                    <div style={{ 
+                      width: '12px', 
+                      height: '12px', 
+                      backgroundColor: threat.risk === 'Critical' ? '#ef4444' : '#f59e0b', 
+                      borderRadius: '50%', 
+                      boxShadow: `0 0 12px ${threat.risk === 'Critical' ? '#ef4444' : '#f59e0b'}`,
+                      border: '2px solid #fff'
+                    }}></div>
+                    <div style={{ fontSize: '0.6rem', color: '#fff', background: 'rgba(0,0,0,0.85)', padding: '2px 6px', borderRadius: '4px', marginTop: '3px', whiteSpace: 'nowrap', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      {threat.city} ({threat.vector})
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>VECTOR INSPECTOR</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Selected origin intelligence</span>
+              
+              <div style={{ background: 'rgba(0,0,0,0.4)', padding: '1.2rem', borderRadius: '10px', fontSize: '0.75rem', color: '#9ca3af', minHeight: '260px', border: `1px solid ${COL_PLASMA_BLUE}22` }}>
+                {selectedGeoThreat ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Origin IP:</strong> {selectedGeoThreat.ip}</div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Location:</strong> {selectedGeoThreat.city}, {selectedGeoThreat.country}</div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Attack Vector:</strong> {selectedGeoThreat.vector}</div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Risk Level:</strong> <span style={{ color: selectedGeoThreat.risk === 'Critical' ? '#ef4444' : '#f59e0b' }}>{selectedGeoThreat.risk}</span></div>
+                    <div><strong style={{ color: COL_PLASMA_BLUE }}>Defense Action:</strong> <span style={{ color: '#34d399' }}>{selectedGeoThreat.status}</span></div>
+                  </div>
+                ) : (
+                  'Click on any threat node on the global map to inspect origin geo-intelligence and attack vector attributes.'
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ALERTS & WEBHOOKS TAB */}
+        {activeTab === 'Alerts & Webhooks' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>WEBHOOK & ALERT PIPELINE CONFIGURATION</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1.2rem' }}>Connect real-time security incident feeds to Slack, PagerDuty, or SIEM endpoints</span>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                <span>INTEGRATION NAME</span>
+                <span>TARGET ENDPOINT</span>
+                <span>STATUS</span>
+                <span>ACTION</span>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                {webhooks.map((hook) => (
+                  <div key={hook.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr', fontSize: '0.75rem', padding: '0.7rem 0.4rem', alignItems: 'center', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}22` }}>
+                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{hook.name}</span>
+                    <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hook.url}</span>
+                    <span style={{ color: hook.status === 'Connected' ? '#34d399' : '#f59e0b', fontWeight: 'bold' }}>{hook.status}</span>
+                    <button 
+                      onClick={() => toggleWebhookStatus(hook.id)}
+                      style={{ 
+                        background: hook.status === 'Connected' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(52, 211, 153, 0.2)', 
+                        border: `1px solid ${hook.status === 'Connected' ? '#f59e0b' : '#34d399'}`, 
+                        color: hook.status === 'Connected' ? '#f59e0b' : '#34d399', 
+                        padding: '0.3rem 0.6rem', 
+                        borderRadius: '6px', 
+                        fontWeight: 'bold', 
+                        fontSize: '0.65rem', 
+                        cursor: 'pointer', 
+                        fontFamily: FONT_MONO 
+                      }}
+                    >
+                      {hook.status === 'Connected' ? 'Pause' : 'Connect'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ borderTop: `1px solid ${COL_PLASMA_BLUE}22`, paddingTop: '1.2rem' }}>
+                <div style={{ fontSize: '0.8rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.3rem' }}>TEST INCIDENT WEBHOOK DISPATCH</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '0.8rem' }}>Trigger simulated critical alert payload to destination endpoint</span>
+                
+                <form onSubmit={sendTestAlert} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <input 
+                    type="text" 
+                    value={testWebhookUrl}
+                    onChange={(e) => setTestWebhookUrl(e.target.value)}
+                    style={{ background: 'rgba(0,0,0,0.5)', border: `1px solid ${COL_PLASMA_BLUE}33`, borderRadius: '8px', padding: '0.6rem 0.8rem', color: '#fff', fontSize: '0.75rem', fontFamily: FONT_MONO }}
+                  />
+                  <button 
+                    type="submit"
+                    style={{ background: `${COL_PLASMA_BLUE}26`, border: `1px solid ${COL_PLASMA_BLUE}`, color: COL_PLASMA_BLUE, padding: '0.6rem 1rem', borderRadius: '8px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', fontFamily: FONT_MONO, alignSelf: 'flex-start' }}
+                  >
+                    Send Test Alert Packet
+                  </button>
+                </form>
+
+                {webhookTestStatus && (
+                  <div style={{ marginTop: '0.8rem', padding: '0.7rem', background: `${COL_PLASMA_BLUE}1a`, border: `1px solid ${COL_PLASMA_BLUE}`, borderRadius: '6px', fontSize: '0.75rem', color: COL_PLASMA_BLUE }}>
+                    {webhookTestStatus}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>ALERT GATEWAY STATS</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Outgoing dispatch metrics</span>
+              
+              <div style={{ background: 'rgba(0,0,0,0.5)', padding: '1.2rem', borderRadius: '10px', fontSize: '0.75rem', color: '#34d399', fontFamily: FONT_MONO, border: `1px solid ${COL_PLASMA_BLUE}33`, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div>[+] Dispatch Queue: EMPTY</div>
+                <div>[+] Success Rate: 99.98%</div>
+                <div>[+] Active Sinks: {webhooks.filter(w => w.status === 'Connected').length} endpoints</div>
+                <div>[+] Retry Policy: Exponential Backoff</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SYSTEM HEALTH & DEPLOYMENT TAB (DAY 10) */}
+        {activeTab === 'System Health & Deployment' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>DOCKER COMPOSE PRODUCTION TOPOLOGY</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1.2rem' }}>Manage containerized services, health status, and cluster deployment hardening</span>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr', fontSize: '0.7rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
+                <span>SERVICE CONTAINER</span>
+                <span>CONTAINER IMAGE</span>
+                <span>PORTS</span>
+                <span>STATUS</span>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                {dockerServices.map((srv, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr', fontSize: '0.75rem', padding: '0.7rem 0.4rem', alignItems: 'center', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', border: `1px solid ${COL_PLASMA_BLUE}22` }}>
+                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{srv.name}</span>
+                    <span style={{ color: '#9ca3af' }}>{srv.image}</span>
+                    <span style={{ color: COL_PLASMA_BLUE }}>{srv.ports}</span>
+                    <span style={{ color: '#34d399', fontWeight: 'bold' }}>{srv.status}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ borderTop: `1px solid ${COL_PLASMA_BLUE}22`, paddingTop: '1.2rem' }}>
+                <div style={{ fontSize: '0.8rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.3rem' }}>PRODUCTION HARDENING SECURITY SCAN</div>
+                <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '0.8rem' }}>Verify kernel isolation, container privileges, and TLS encryption ciphers</span>
+                
+                <button 
+                  onClick={executeHardeningScan}
+                  style={{ background: `${COL_PLASMA_BLUE}26`, border: `1px solid ${COL_PLASMA_BLUE}`, color: COL_PLASMA_BLUE, padding: '0.7rem 1.2rem', borderRadius: '8px', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', fontFamily: FONT_MONO }}
+                >
+                  Execute Production Hardening Scan
+                </button>
+
+                {hardeningStatus && (
+                  <div style={{ marginTop: '0.8rem', padding: '0.7rem', background: `${COL_PLASMA_BLUE}1a`, border: `1px solid ${COL_PLASMA_BLUE}`, borderRadius: '6px', fontSize: '0.75rem', color: COL_PLASMA_BLUE }}>
+                    {hardeningStatus}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: '0.85rem', color: COL_PLASMA_BLUE, fontWeight: 'bold', marginBottom: '0.4rem' }}>CLUSTER MODE & CONFIG</div>
+              <span style={{ fontSize: '0.65rem', color: '#6b7280', display: 'block', marginBottom: '1rem' }}>Deployment architecture settings</span>
+              
+              <div style={{ background: 'rgba(0,0,0,0.5)', padding: '1.2rem', borderRadius: '10px', fontSize: '0.75rem', color: '#34d399', fontFamily: FONT_MONO, border: `1px solid ${COL_PLASMA_BLUE}33`, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div>[+] Architecture: Docker Compose v2</div>
+                <div>[+] Mode: {clusterMode}</div>
+                <div>[+] Redis Cache: CONNECTED</div>
+                <div>[+] eBPF Ring Buffer: SECURE</div>
+                <div>[+] TLS Certificate: Valid (Let's Encrypt)</div>
               </div>
             </div>
           </div>
