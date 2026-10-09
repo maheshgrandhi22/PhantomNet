@@ -50,4 +50,4 @@ def handle_connect():
 
 if __name__ == '__main__':
     threading.Thread(target=background_telemetry_stream, daemon=True).start()
-    socketio.run(app, port=5050, debug=True)
+    socketio.run(app, port=5051, debug=True)

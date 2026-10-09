@@ -20,73 +20,170 @@ HONEY_LOGS = [
     {"source": "192.168.1.105", "command": "cat /etc/passwd", "timestamp": "21:42:05"}
 ]
 
-@app.route('/')
+@app.route("/", methods=["GET"])
 def index():
     return jsonify({
         "status": "ONLINE",
         "system": "PhantomNet SOC WebSocket Server V2.0",
-        "endpoints": ["/api/events", "/api/event", "/api/honey/command"]
+        "endpoints": [
+            "/api/events",
+            "/api/event",
+            "/api/honey/command",
+            "/api/sqli/intercept"
+        ]
     }), 200
 
-@app.route('/api/event', methods=['POST'])
+
+# Receive events from PhantomFS
+@app.route("/api/event", methods=["POST"])
 def handle_event():
     data = request.get_json(silent=True) or {}
+
+    event_type = data.get("type", "NETWORK_EVENT")
+
+    # Preserve the filesystem event details sent by PhantomFS
     event = {
-        "source": data.get("source", "192.168.1.150"),
-        "dest": data.get("dest", "10.0.0.4 (Honey)"),
-        "service": data.get("service", "SSH"),
-        "decision": data.get("decision", "TARPIT"),
-        "severity": data.get("severity", "HIGH"),
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "payload": data.get("payload", "Unauthorized shell probe detected")
+        "type": event_type,
+        "path": data.get("path", ""),
+        "bytes": data.get("bytes", 0),
+        "source": data.get("source", request.remote_addr or "unknown"),
+        "dest": data.get("dest", "PhantomNet Honeypot"),
+        "service": data.get(
+            "service",
+            "FILESYSTEM" if event_type.startswith("FILE_") else "NETWORK"
+        ),
+        "decision": data.get("decision", "LOGGED"),
+        "severity": data.get(
+            "severity",
+            "HIGH" if event_type in ("FILE_WRITE", "FILE_TRUNCATE")
+            else "MEDIUM"
+        ),
+        "timestamp": datetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+        "payload": data.get("payload", "")
     }
+
     ATTACK_EVENTS.insert(0, event)
-    if len(ATTACK_EVENTS) > 50:
-        ATTACK_EVENTS.pop()
-        
-    socketio.emit('telemetry_update', {
+
+    # Keep the most recent 50 events
+    del ATTACK_EVENTS[50:]
+
+    socketio.emit("telemetry_update", {
         "active_sessions": 27 + len(ATTACK_EVENTS),
-        "high_severity": sum(1 for e in ATTACK_EVENTS if e['severity'] in ['HIGH', 'CRITICAL']),
+        "high_severity": sum(
+            1 for item in ATTACK_EVENTS
+            if item.get("severity") in ("HIGH", "CRITICAL")
+        ),
         "network_flows": 1489 + len(ATTACK_EVENTS),
-        "stream": f"Intercepted {event['service']} probe from {event['source']} -> action: {event['decision']}",
+        "stream": (
+            f"{event['type']}: {event['path'] or event['service']} "
+            f"-> {event['decision']}"
+        ),
         "flows": ATTACK_EVENTS
     })
-    return jsonify({"status": "success", "event": event}), 200
 
-@app.route('/api/honey/command', methods=['POST'])
+    return jsonify({
+        "status": "success",
+        "event": event
+    }), 200
+
+
+# Receive commands sent to the honeypot
+@app.route("/api/honey/command", methods=["POST"])
 def handle_honey_command():
     data = request.get_json(silent=True) or {}
-    cmd = data.get("command", "whoami")
-    source_ip = data.get("source", "203.0.113.42")
-    ts = datetime.datetime.now().strftime("%H:%M:%S")
-    
-    entry = {"source": source_ip, "command": cmd, "timestamp": ts}
+
+    command = data.get("command", "whoami")
+    source_ip = data.get(
+        "source", request.remote_addr or "unknown"
+    )
+
+    entry = {
+        "source": source_ip,
+        "command": command,
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+    }
+
     HONEY_LOGS.insert(0, entry)
-    socketio.emit('honey_log', entry)
-    return jsonify({"status": "intercepted", "entry": entry}), 200
+    del HONEY_LOGS[50:]
 
-@app.route('/api/events', methods=['GET'])
+    socketio.emit("honey_log", entry)
+
+    return jsonify({
+        "status": "intercepted",
+        "entry": entry
+    }), 200
+
+
+# Return stored attack events
+@app.route("/api/events", methods=["GET"])
 def get_events():
-    return jsonify({"total": len(ATTACK_EVENTS), "flows": ATTACK_EVENTS}), 200
+    return jsonify({
+        "total": len(ATTACK_EVENTS),
+        "flows": ATTACK_EVENTS
+    }), 200
 
-if __name__ == '__main__':
-    print("🚀 Starting PhantomNet SOC WebSocket Server on http://0.0.0.0:5050")
-    socketio.run(app, host='0.0.0.0', port=5050, debug=False, allow_unsafe_werkzeug=True)
 
-@app.route('/api/sqli/intercept', methods=['POST'])
+# Record SQL injection simulation/interception events
+@app.route("/api/sqli/intercept", methods=["POST"])
 def handle_sqli_intercept():
     data = request.get_json(silent=True) or {}
+
     payload = data.get("payload", "' OR '1'='1")
-    source_ip = data.get("source", "45.33.32.156")
-    ts = datetime.datetime.now().strftime("%H:%M:%S")
-    
+    source_ip = data.get(
+        "source", request.remote_addr or "unknown"
+    )
+
     entry = {
-        "source": source_ip, 
-        "payload": payload, 
-        "decision": "BLOCKED", 
-        "severity": "CRITICAL", 
-        "timestamp": ts
+        "type": "SQLI_ATTEMPT",
+        "source": source_ip,
+        "dest": "10.0.0.8 (SQL)",
+        "service": "POSTGRES",
+        "payload": payload,
+        "decision": "BLOCKED",
+        "severity": "CRITICAL",
+        "timestamp": datetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
     }
-    
-    socketio.emit('sqli_log', entry)
-    return jsonify({"status": "intercepted", "entry": entry}), 200
+
+    ATTACK_EVENTS.insert(0, entry)
+    del ATTACK_EVENTS[50:]
+
+    socketio.emit("sqli_log", entry)
+
+    socketio.emit("telemetry_update", {
+        "active_sessions": 27 + len(ATTACK_EVENTS),
+        "high_severity": sum(
+            1 for item in ATTACK_EVENTS
+            if item.get("severity") in ("HIGH", "CRITICAL")
+        ),
+        "network_flows": 1489 + len(ATTACK_EVENTS),
+        "stream": (
+            f"SQLI_ATTEMPT from {entry['source']} "
+            f"-> {entry['decision']}"
+        ),
+        "flows": ATTACK_EVENTS
+    })
+
+    return jsonify({
+        "status": "intercepted",
+        "entry": entry
+    }), 200
+
+
+# Start the server only after all routes are registered
+if __name__ == "__main__":
+    print(
+        "Starting PhantomNet SOC WebSocket Server "
+        "on http://0.0.0.0:5050"
+    )
+
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=5050,
+        debug=False,
+        allow_unsafe_werkzeug=True
+    )

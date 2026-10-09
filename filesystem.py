@@ -1,1 +1,147 @@
-/root/phantomnet/fs.py
+﻿import os
+import sys
+import errno
+import time
+import threading
+import requests
+from fuse import FUSE, FuseOSError, Operations
+from lore import LoreGenerator
+
+LOG_API_URL = "http://127.0.0.1:5050/api/event"
+
+class PhantomFS(Operations):
+    def __init__(self):
+        self.lore = LoreGenerator()
+        self.cache = {}
+
+    def _norm(self, path):
+        path = os.path.normpath(path)
+        return "/" if path == "." else path
+
+    def _async_log(self, event_type, path, num_bytes=0, payload=""):
+        def send_log():
+            try:
+                data = {
+                    "type": event_type,
+                    "path": path,
+                    "bytes": num_bytes,
+                    "payload": payload[:200]
+                }
+                requests.post(LOG_API_URL, json=data, timeout=1.5)
+            except Exception:
+                pass
+
+        threading.Thread(target=send_log, daemon=True).start()
+
+    def getattr(self, path, fh=None):
+        path = self._norm(path)
+        now = time.time()
+
+        if path in ["/", "/root", "/root/.aws", "/root/.ssh",
+                    "/var", "/var/www", "/var/www/html", "/etc"]:
+            return dict(
+                st_mode=0o040755,
+                st_nlink=2,
+                st_size=4096,
+                st_ctime=now,
+                st_mtime=now,
+                st_atime=now
+            )
+
+        content = self.cache.get(path) or self.lore.get_content(path)
+
+        if content is not None:
+            size = len(content.encode("utf-8"))
+            mode = 0o100600 if ".ssh" in path or ".env" in path else 0o100644
+
+            return dict(
+                st_mode=mode,
+                st_nlink=1,
+                st_size=size,
+                st_ctime=now,
+                st_mtime=now,
+                st_atime=now
+            )
+
+        raise FuseOSError(errno.ENOENT)
+
+    def readdir(self, path, fh):
+        path = self._norm(path)
+        entries = [".", ".."]
+
+        if path == "/":
+            entries.extend(["root", "var", "etc"])
+        elif path == "/root":
+            entries.extend([".env", ".aws", ".ssh"])
+        elif path == "/root/.aws":
+            entries.extend(["credentials", "config"])
+        elif path == "/root/.ssh":
+            entries.extend(["id_rsa", "authorized_keys"])
+        elif path == "/var/www/html":
+            entries.extend(["config.php", "index.php"])
+        elif path == "/etc":
+            entries.extend(["passwd", "shadow"])
+
+        return entries
+
+    def open(self, path, flags):
+        path = self._norm(path)
+        self._async_log("FILE_OPEN", path)
+        return 0
+
+    def read(self, path, size, offset, fh):
+        path = self._norm(path)
+        content = self.cache.get(path) or self.lore.get_content(path)
+
+        if content is None:
+            raise FuseOSError(errno.ENOENT)
+
+        encoded = content.encode("utf-8")
+        chunk = encoded[offset:offset + size]
+
+        self._async_log("FILE_READ", path, num_bytes=len(chunk))
+        return chunk
+
+    def write(self, path, data, offset, fh):
+        path = self._norm(path)
+        current = self.cache.get(path) or self.lore.get_content(path) or ""
+
+        data_str = data.decode("utf-8", errors="ignore")
+        updated = current[:offset] + data_str
+        self.cache[path] = updated
+
+        self._async_log(
+            "FILE_WRITE",
+            path,
+            num_bytes=len(data),
+            payload=data_str
+        )
+
+        return len(data)
+
+    def truncate(self, path, length, fh=None):
+        path = self._norm(path)
+        current = self.cache.get(path) or self.lore.get_content(path) or ""
+        self.cache[path] = current[:length]
+
+        self._async_log(
+            "FILE_TRUNCATE",
+            path,
+            num_bytes=length
+        )
+
+        return 0
+
+
+if __name__ == "__main__":
+    mount_point = "/tmp/phantom_mount"
+    os.makedirs(mount_point, exist_ok=True)
+
+    print(f"PhantomFS Honeypot mounting at {mount_point}...")
+
+    FUSE(
+        PhantomFS(),
+        mount_point,
+        foreground=True,
+        allow_other=True
+    )
