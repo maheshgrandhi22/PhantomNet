@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import random
@@ -23,7 +23,11 @@ telemetry_state = {
 
 @app.route('/')
 def index():
-    return jsonify({"system": "PhantomNet SOC V2.0", "status": "ONLINE"})
+    return send_from_directory("frontend/dist", "index.html")
+
+@app.route('/assets/<path:filename>')
+def frontend_assets(filename):
+    return send_from_directory("frontend/dist/assets", filename)
 
 @app.route('/api/telemetry')
 def telemetry():
