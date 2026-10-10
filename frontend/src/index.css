@@ -1,55 +1,78 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
 body {
-  background-color: #000000;
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: #030712;
   background-image: radial-gradient(circle at 50% 0%, #0a1128 0%, #000000 70%);
   color: #f3f4f6;
   font-family: 'Courier New', Courier, monospace;
-  margin: 0;
-  padding: 2rem;
+}
+
+#root {
+  width: 100%;
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 #root > div {
-  max-width: 1400px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  margin: 0;
 }
 
-header {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 242, 255, 0.2);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
-/* Transform metrics area into a grid */
-#root > div > div:nth-child(2) {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+button {
+  max-width: 100%;
 }
 
-/* Glassmorphism style for all metric and status cards */
-#root > div > div div, 
-.bg-slate-900, 
-[class*="bg-slate-900"] {
-  background: rgba(10, 15, 30, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(0, 242, 255, 0.15) !important;
-  border-radius: 12px !important;
-  padding: 1.25rem !important;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6) !important;
-  transition: all 0.3s ease;
+img,
+canvas,
+svg {
+  max-width: 100%;
 }
 
-#root > div > div div:hover {
-  border-color: rgba(0, 242, 255, 0.4);
-  box-shadow: 0 20px 40px -15px rgba(0, 242, 255, 0.2);
-  transform: translateY(-2px);
+@media (max-width: 900px) {
+  #root > div {
+    flex-direction: column !important;
+  }
+
+  #root > div > aside {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 1rem !important;
+    gap: 1rem !important;
+  }
+
+  #root > div > aside nav {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.5rem !important;
+  }
+
+  #root > div > main {
+    width: 100%;
+    min-width: 0;
+    padding: 1rem !important;
+  }
 }

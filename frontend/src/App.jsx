@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 
 export default function App() {
@@ -235,10 +235,10 @@ export default function App() {
     : telemetry.flows.filter(f => f.severity === filterSeverity);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#030712', color: '#f3f4f6', fontFamily: FONT_MONO }}>
+    <div style={{ display: 'flex', width: '100%', maxWidth: 'none', minHeight: '100vh', boxSizing: 'border-box', backgroundColor: '#030712', color: '#f3f4f6', fontFamily: FONT_MONO }}>
       
       {/* Sidebar Navigation */}
-      <aside style={{ width: '270px', background: COL_NAVY_DEEP, borderRight: `1px solid ${COL_PLASMA_BLUE}1a`, padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <aside style={{ width: '250px', minWidth: '250px', flexShrink: 0, boxSizing: 'border-box', background: COL_NAVY_DEEP, borderRight: `1px solid ${COL_PLASMA_BLUE}1a`, padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         <div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#ffffff', margin: '0 0 0.3rem 0', letterSpacing: '1px' }}>PHANTOMNET</h2>
           <span style={{ fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '2px' }}>SOC Operations V2</span>
@@ -281,7 +281,7 @@ export default function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, padding: '2.25rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
+      <main style={{ flex: '1 1 0%', minWidth: 0, width: '0', boxSizing: 'border-box', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -296,7 +296,7 @@ export default function App() {
         {/* OVERVIEW TAB */}
         {activeTab === 'Overview' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', minWidth: 0, gap: '1.25rem' }}>
               <div style={cardStyle}>
                 <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>ACTIVE SESSIONS</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#fff' }}>{telemetry.active_sessions}</div>
@@ -331,7 +331,7 @@ export default function App() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold' }}>
                       <span>{m.name}</span><span style={{ color: m.status === 'READY' ? '#34d399' : '#f59e0b' }}>{m.status}</span>
                     </div>
-                    <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '0.3rem' }}>{m.role} • {m.latency}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '0.3rem' }}>{m.role} â€¢ {m.latency}</div>
                   </div>
                 ))}
               </div>
@@ -984,3 +984,4 @@ export default function App() {
     </div>
   );
 }
+
